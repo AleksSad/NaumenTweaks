@@ -188,6 +188,38 @@
 
 "use strict";
 
+
+let headers_txt = "Заголовки страниц, по которым пробежались:\n"
+getFromUrl("/fx/$crm/ru.naumen.crm2.published_jsp?uuid=coreboqnpd7380000i12mtv3s695au7k", true, function(response) {
+	let responseDiv = document.createElement('div');
+	responseDiv.innerHTML = response;
+    response = null;
+	let header = responseDiv.querySelector('#publisher_div .pageheader>tbody>tr:last-child>td').innerHTML;
+    console.log(header)
+    headers_txt += header + "\n"
+
+    getFromUrl("/fx/$crm/ru.naumen.crm2.published_jsp?uuid=corebofs000080000jb2a0hgemio52hk", true, function(response) {
+        let responseDiv = document.createElement('div');
+        responseDiv.innerHTML = response;
+        response = null;
+        let header = responseDiv.querySelector('#publisher_div .pageheader>tbody>tr:last-child>td').innerHTML;
+        console.log(header)
+        headers_txt += header + "\n"
+
+        getFromUrl("/fx/$crm/ru.naumen.crm2.published_jsp?uuid=crmsrv623829", true, function(response) {
+            let responseDiv = document.createElement('div');
+            responseDiv.innerHTML = response;
+            response = null;
+            let header = responseDiv.querySelector('#publisher_div .pageheader>tbody>tr:last-child>td').innerHTML;
+            console.log(header)
+            headers_txt += header + "\n"
+
+            alert(headers_txt);
+        });
+    });
+});
+
+
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
 /////// Используемые типы обращений и ответственные ///////

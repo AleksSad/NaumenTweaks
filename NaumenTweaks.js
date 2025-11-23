@@ -283,10 +283,15 @@ objIds.responsibles[1].trim().split('\n').forEach(line => {
 /////// Настройки скрипта ///////
 /////////////////////////////////
 /////////////////////////////////
-const employees = sessionStorage.employees || Object.fromEntries(
-  Object.entries(getWorkers('coreboqnpd7380000i12mtv3s695au7k')).sort((a, b) => a[1].localeCompare(b[1], 'ru'))
-);
-sessionStorage.employees = employees
+const employees = (sessionStorage.employees = JSON.stringify(
+  (() => {
+    try { return JSON.parse(sessionStorage.employees) }
+    catch { return Object.fromEntries(
+        Object.entries(getWorkers('coreboqnpd7380000i12mtv3s695au7k'))
+        .sort((a, b) => a[1].localeCompare(b[1], 'ru'))
+    ) }
+  })()
+), JSON.parse(sessionStorage.employees));
 
 // Перечень настроек и возможных параметров.
 var parameters = {

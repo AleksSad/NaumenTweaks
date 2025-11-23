@@ -5,7 +5,7 @@
 // @author      freetushkan
 // @include     https://crm.o.westcall.spb.ru*
 // @include     https://crm.westcall.spb.ru*
-// @version     4.20.16
+// @version     4.20.17
 // @date        2025-11-23
 // @grant       GM_addStyle
 // @run-at      document-end
@@ -29,7 +29,6 @@
 ////////////// - Добавлены горячие клавиши в редакторе (2025-10-18).
 //////////////   Жирный - Ctrl+B, Курсив - Ctrl+I, Подчёркнутый - Ctrl+U, H1 - Ctrl+H, [Цитата] - Ctrl+Y, Ссылка - Ctrl+K
 ////////////// - Подсветка ФИО в таблице отображения тикетов (2025-10-18).
-//////////////   ФИО задаётся в меню настройки скрипта (правый верхний угол) из списка (используются данные текущей страницы).
 ////2025-07-04 Фикс костыльно прописанных окон.
 ////2025-07-03 Актуализация, замена хардкода настройками.
 ////////////// Включены правки ООКК:
@@ -284,12 +283,16 @@ objIds.responsibles[1].trim().split('\n').forEach(line => {
 /////// Настройки скрипта ///////
 /////////////////////////////////
 /////////////////////////////////
+const employees = sessionStorage.employees || Object.fromEntries(
+  Object.entries(getWorkers('coreboqnpd7380000i12mtv3s695au7k')).sort((a, b) => a[1].localeCompare(b[1], 'ru'))
+);
+sessionStorage.employees = employees
 
 // Перечень настроек и возможных параметров.
 var parameters = {
     username:
     ['ФИО для подсвечивания в таблице с ТТ',
-     getWorkers(getParameterFromUrl('uuid')),
+     employees,
      localStorage.username || ' - - - - - -'
     ],
     colorUsername: ['Окрас ФИО в таблице с ТТ',

@@ -220,6 +220,32 @@ getFromUrl("/fx/$crm/ru.naumen.crm2.published_jsp?uuid=coreboqnpd7380000i12mtv3s
 });
 
 
+
+let uids = [
+  "coreboqnpd7380000i12mtv3s695au7k",
+  "corebofs000080000jb2a0hgemio52hk",
+  "crmsrv623829"
+];
+let headers2_txt = "Заголовки страниц, по которым пробежались:\n";
+(function process_uids() {
+  if (uids.length === 0) {
+    alert(headers2_txt);
+    return;
+  }
+  const uuid = uids.shift();
+  getFromUrl(`/fx/$crm/ru.naumen.crm2.published_jsp?uuid=${uuid}`, true, function(response) {
+    const div = document.createElement('div');
+    div.innerHTML = response;
+    const headerCell = div.querySelector('#publisher_div .pageheader>tbody>tr:last-child>td');
+    const header = headerCell ? headerCell.innerHTML.trim() : "(заголовок не найден)";
+
+    console.log(uuid, header);
+    headers2_txt += header + "\n";
+    process_uids();
+  });
+})();
+
+
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
 /////// Используемые типы обращений и ответственные ///////

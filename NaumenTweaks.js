@@ -5,8 +5,8 @@
 // @author      freetushkan
 // @include     https://crm.o.westcall.spb.ru*
 // @include     https://crm.westcall.spb.ru*
-// @version     4.20.18
-// @date        2025-11-24
+// @version     4.20.19
+// @date        2025-11-23
 // @grant       GM_addStyle
 // @run-at      document-end
 // @downloadURL https://gist.github.com/freetushkan/819343498d988b6a8ffe25ee157ff2d2/raw/NaumenTweaks.user.js
@@ -295,11 +295,12 @@ let requestTypes = {},
         }
     });
 
+    let mydep = localStorage.mydep || 'coreboqnpd7380000i12mtv3s695au7k';
     employees = (sessionStorage.employees = JSON.stringify(
         (() => {
             try { return JSON.parse(sessionStorage.employees) }
             catch { return Object.fromEntries(
-                Object.entries(getWorkers(parameters.mydep[2]))
+                Object.entries(getWorkers(mydep))
                 .sort((a, b) => a[1].localeCompare(b[1], 'ru'))
             ) }
         })()
@@ -310,7 +311,7 @@ let requestTypes = {},
         mydep:
         ['Мой отдел',
          responsibles_simple,
-         localStorage.mydep || 'coreboqnpd7380000i12mtv3s695au7k'
+         mydep
         ],
         username:
         ['ФИО для подсвечивания в таблице с ТТ',
@@ -613,6 +614,7 @@ function build_conf_page(event) {
             let value = this.options[this.selectedIndex].value;
             if (value != 'undefined') {
                 localStorage[this.id] = value;
+                console.log(this.id, localStorage[this.id], value);
                 needReload = true;
                 if (param == 'mydep') sessionStorage.removeItem('employees');
                 loadParameters();

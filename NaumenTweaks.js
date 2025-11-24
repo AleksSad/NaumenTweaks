@@ -5,14 +5,16 @@
 // @author      freetushkan
 // @include     https://crm.o.westcall.spb.ru*
 // @include     https://crm.westcall.spb.ru*
-// @version     4.20.17
-// @date        2025-11-23
+// @version     4.20.18
+// @date        2025-11-24
 // @grant       GM_addStyle
 // @run-at      document-end
 // @downloadURL https://gist.github.com/freetushkan/819343498d988b6a8ffe25ee157ff2d2/raw/NaumenTweaks.user.js
 // ==/UserScript==
 
-////////////// - (added) Окрас списка услуг при регистрации (SD_IT)
+
+////2025-11-24 + Изменения страницы настроек. Опция Мой отдел влияет на список ФИО. Изменение параметров перезагружает окно настройки. (freetushkan)
+////////////// + Подсветка списка услуг при регистрации ТТ. (SD_IT)
 ////2025-11-23 Включены правки от неизвестного автора:
 ////////////// - Шаблон для Интернета в едитор (2023-01-31).
 ////////////// - Шаблон для Телефонии в едитор (Ruda) (2023-04-10).
@@ -29,6 +31,7 @@
 ////////////// - Добавлены горячие клавиши в редакторе (2025-10-18).
 //////////////   Жирный - Ctrl+B, Курсив - Ctrl+I, Подчёркнутый - Ctrl+U, H1 - Ctrl+H, [Цитата] - Ctrl+Y, Ссылка - Ctrl+K
 ////////////// - Подсветка ФИО в таблице отображения тикетов (2025-10-18).
+//////////////   ФИО задаётся в меню настройки скрипта (правый верхний угол) из списка (используются данные текущей страницы).
 ////2025-07-04 Фикс костыльно прописанных окон.
 ////2025-07-03 Актуализация, замена хардкода настройками.
 ////////////// Включены правки ООКК:
@@ -188,13 +191,26 @@
 
 "use strict";
 
+
+
+
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
 /////// Используемые типы обращений и ответственные ///////
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
-let objIds = {
-    requestTypes: ["Типы обращений", localStorage.requestTypes || `
+let requestTypes = {},
+    responsibles = {},
+    responsibles_simple = {},
+    employees = {},
+    parameters = {},
+    answerTemplates = {},
+    objIds = {},
+    loadParameters;
+
+(loadParameters = function() {
+    objIds = {
+        requestTypes: ["Типы обращений", localStorage.requestTypes || `
         other_UL92 | Вопрос по услугам
         paymentreq | Оплата
         other_UL91 | Вопрос по договору
@@ -225,7 +241,7 @@ let objIds = {
         #serviceConsultation | Консультация
         #debitorka | Работа с дебиторкой
     `],
-    responsibles: ["Ответственные", localStorage.responsibles || `
+        responsibles: ["Ответственные", localStorage.responsibles || `
         corebo180580g0000i8li5a87ilb80u4 | ООК | Отдел обслуживания клиентов
         corebo18058200000ocalu5qtitlosfc | Приборки | Группа обслуживания КК M&A
         corebo180580g0000i8li5f2oueiengo | Дебиторы | Сектор по работе с дебиторской задолженностью
@@ -251,274 +267,447 @@ let objIds = {
         corebo18058200000mrakvoclvbg8j1s | ВОЛС | Направление ВОЛС
         corebofs000080000ke13natnt54jrro | ДЦ | Направление технической поддержки и эксплуатации дата-центра
     `]
-}
+    }
 
+    let breakCount = 1;
+    requestTypes = {};
+    responsibles = {};
+    responsibles_simple = {};
+    objIds.requestTypes[1].trim().split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#')) return;
+        const [key, name] = trimmed.split('|');
+        if (key && name) {
+            requestTypes[key.trim()] = name.trim();
+        }
+    });
+    objIds.responsibles[1].trim().split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#')) return;
+        if (trimmed === '') {
+            responsibles[`break${breakCount++}`] = 'break';
+            return;
+        }
+        const [key, tag, name] = trimmed.split('|');
+        if (key && tag && name) {
+            responsibles[key.trim()] = [tag.trim(), name.trim()];
+            responsibles_simple[key.trim()] = name.trim();
+        }
+    });
 
-let requestTypes = {},
-    responsibles = {},
-    breakCount = 1;
-objIds.requestTypes[1].trim().split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('#')) return;
-    const [key, name] = trimmed.split('|');
-    if (key && name) {
-        requestTypes[key.trim()] = name.trim();
-    }
-});
-objIds.responsibles[1].trim().split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('#')) return;
-    if (trimmed === '') {
-        responsibles[`break${breakCount++}`] = 'break';
-        return;
-    }
-    const [key, tag, name] = trimmed.split('|');
-    if (key && tag && name) {
-        responsibles[key.trim()] = [tag.trim(), name.trim()];
-    }
-});
+    employees = (sessionStorage.employees = JSON.stringify(
+        (() => {
+            try { return JSON.parse(sessionStorage.employees) }
+            catch { return Object.fromEntries(
+                Object.entries(getWorkers(parameters.mydep[2]))
+                .sort((a, b) => a[1].localeCompare(b[1], 'ru'))
+            ) }
+        })()
+    ), JSON.parse(sessionStorage.employees));
+
+    // Перечень настроек и возможных параметров.
+    parameters = {
+        mydep:
+        ['Мой отдел',
+         responsibles_simple,
+         localStorage.mydep || 'coreboqnpd7380000i12mtv3s695au7k'
+        ],
+        username:
+        ['ФИО для подсвечивания в таблице с ТТ',
+         employees,
+         localStorage.username || ' - - - - - -'
+        ],
+        colorUsername: ['Окрас ФИО в таблице с ТТ',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.colorUsername || '1'
+        ],
+        taskKrus: ['Быстрый просмотр ТТ в КРУС',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.taskKrus || '1'
+        ],
+        taskPreview: ['Предпросмотр задач',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.taskPreview || '1'
+        ],
+        requestPreview:
+        ['Предпросмотр обращений',
+         {0: 'Отключить', 1: 'Фиксированная панель', 2: 'Всплывающая панель'},
+         localStorage.requestPreview || '0'
+        ],
+        requestFilter:
+        ['Быстрый фильтр обращений',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.requestFilter || '1'
+        ],
+        requestsMassChange:
+        ['Массовая смена ответственного за обращения',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.requestsMassChange || '1'
+        ],
+        requestsCounter:
+        ['Счётчик обращений',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.requestsCounter || '0'
+        ],
+        requestsPageExtend:
+        ['Отображение 200 обращений на странице вместо 100',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.requestsPageExtend || '1'
+        ],
+        refreshCountdown:
+        ['Обратный отсчёт обновления страницы',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.refreshCountdown || '1'
+        ],
+        clickableLinks:
+        ['Кликабельные ссылки и номера',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.clickableLinks || '1'
+        ],
+        regRequestAutofill:
+        ['Автозаполнение окна регистрации обращения',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.regRequestAutofill || '1'
+        ],
+        defaultRequestType:
+        ['Тип обращения на контрагенте по умолчанию',
+         requestTypes,
+         localStorage.defaultRequestType || 'paymentreq'
+        ],
+        quickRequest:
+        ['Быстрый выбор типа обращения',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.quickRequest || '1'
+        ],
+        responsibleDepartment:
+        ['Отображение ответственного подразделения',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.responsibleDepartment || '0'
+        ],
+        showAccountInfo:
+        ['Отображение логина и пароля аккаунта',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.showAccountInfo || '1'
+        ],
+        autoResize:
+        ['Автоматический подбор размера окна',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.autoResize || '1'
+        ],
+        autoResizeTimeout:
+        ['Задержка автоподбора размера окна',
+         {75: '75 мс', 100: '100 мс', 125: '125 мс', 150: '150 мс', 175: '175 мс',
+          200: '200 мс', 225: '225 мс', 250: '250 мс', 275: '275 мс', 300: '300 мс'},
+         localStorage.autoResizeTimeout || '200'
+        ],
+        fullsizeSelects:
+        ['Полноразмерные раскрывающиеся списки',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.fullsizeSelects || '1'
+        ],
+        hideNotifyBlock:
+        ['Минимизация списка оповещаемых',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.hideNotifyBlock || '1'
+        ],
+        filterNotifyBlock:
+        ['Альтернативная фильтрация списка оповещаемых',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.filterNotifyBlock || '1'
+        ],
+        textEditor:
+        ['Редактор текстовых полей',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.textEditor || '1'
+        ],
+        textEditorHot:
+        ['Редактор текстовых полей горячими клавишами',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.textEditorHot || '1'
+        ],
+        textEditorBehavior:
+        ['Поведение редактора текстовых полей',
+         {0: 'Переходить в конец текста', 1: 'Выделять обработанный текст'},
+         localStorage.textEditorBehavior || '1'
+        ],
+        textTemplates:
+        ['Шаблоны текстовых полей',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.textTemplates || '1'
+        ],
+        hideInSearchResults:
+        ['Скрытие длинных списков в столбцах результатов поиска',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.hideInSearchResults || '1'
+        ],
+        quickSearch:
+        ['Упрощённый поиск',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.quickSearch || '1'
+        ],
+        quickSearchForceOpen:
+        ['Действие упрощённого поиска',
+         {0: 'Переход к результатам', 1: 'Прямой переход в результат', 2: 'Прямой переход в результат (адаптивный)'},
+         localStorage.quickSearchForceOpen || '2'
+        ],
+        quickSearchSpaceToAsterisk:
+        ['Замена пробела на "*" в упрощённом поиске',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.quickSearchSpaceToAsterisk || '1'
+        ],
+        localNotes:
+        ['Краткие заметки (закладки)',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.localNotes || '1'
+        ],
+        localNotesTTL:
+        ['Время хранения заметок',
+         {0: 'Хранить всегда', 1: '1 день', 2: '2 дня', 4: '4 дня', 7: '7 дней', 14: '14 дней', 30: '30 дней'},
+         localStorage.localNotesTTL || '0'
+        ],
+        submitCtrlEnter:
+        ['Отправка по Ctrl+Enter',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.submitCtrlEnter || '1'
+        ],
+        experimental:
+        ['Экспериментальные функции',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.experimental || '0'
+        ],
+        colorTable:
+        ['Окрас таблицы с ТТ',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.colorTable || '1'
+        ],
+        colorHistory:
+        ['Окрас таблицы с историей ТТ',
+         {0: 'Отключить', 1: 'Включить'},
+         localStorage.colorHistory || '1'
+        ]
+    };
+
+    // Объект шаблонов ответов.
+    answerTemplates = {
+        addCommentTemplate:
+        ['Шаблоны добавления комментария',
+         localStorage.addCommentTemplate || 'Нет ответа.\nНедоступен.\nЗанято.\nСброс.\n' +
+         'Автоответчик.\nОтправлен новый счет и указано напоминание о долге в письме красными буквами.\nВ выписке \nприслали платежное поручение'
+        ],
+        setTaskStateTemplate:
+        ['Шаблоны смены состояния задачи',
+         localStorage.setTaskStateTemplate || 'Выполнено\nподписанные документы в файлах'
+        ],
+        regRequestClientTemplate:
+        ['Шаблоны регистрации обращения на контрагенте',
+         localStorage.regRequestClientTemplate || '1С+\nДолжник\n, предоплатник\n' +
+         'В выписке \nПрислали ПП\nПросьба в счете и счет-фактуре от __.__ произвести минусовую корректировку на сумму ___ по услуге _____ по причине _____.\nклиент переведен в арм на договор \nНа почту отправлено напоминание об оплате и счета за месяц.'
+        ],
+        regRequestPointTemplate:
+        ['Шаблоны регистрации обращения на точке присутствия',
+         localStorage.regRequestPointTemplate || 'Не отвечает коммутатор xxxxx.\nРастут ошибки на магистрали.\n' +
+         'Подключен по меди, аплинк xxxxx.\nПодключен по оптике, аплинк xxxxx.\nАДС о работах не сообщали.\n' +
+         'Отключали электричество, после включения оборудование не поднялось.\nНеобходима замена коммутатора.'
+        ],
+        setStateTemplate:
+        ['Шаблоны смены состояния',
+         localStorage.setStateTemplate || '1С+\nВыполнено\nподписанные документы в файлах.'
+        ],
+        changeResponsibleTemplate:
+        ['Шаблоны смены ответственного',
+         localStorage.changeResponsibleTemplate || 'Нет ответа.\nНедоступен.\nЗанято.\nСброс.\nАвтоответчик.\n' +
+         'Перезвонить позже.\nАбонент перезвонит сам.\nНе дозвонился.'
+        ],
+        additionalInfoTemplate:
+        ['Шаблоны дополнительной информации на карточке контрагента',
+         localStorage.additionalInfoTemplate || 'Свитч 172.17.ххх порт ххх.\nНе хватает фантазии.'
+        ]
+    };
+})();
 
 /////////////////////////////////
 /////////////////////////////////
 /////// Настройки скрипта ///////
 /////////////////////////////////
 /////////////////////////////////
-const employees = (sessionStorage.employees = JSON.stringify(
-  (() => {
-    try { return JSON.parse(sessionStorage.employees) }
-    catch { return Object.fromEntries(
-        Object.entries(getWorkers('coreboqnpd7380000i12mtv3s695au7k'))
-        .sort((a, b) => a[1].localeCompare(b[1], 'ru'))
-    ) }
-  })()
-), JSON.parse(sessionStorage.employees));
-
-// Перечень настроек и возможных параметров.
-var parameters = {
-    username:
-    ['ФИО для подсвечивания в таблице с ТТ',
-     employees,
-     localStorage.username || ' - - - - - -'
-    ],
-    colorUsername: ['Окрас ФИО в таблице с ТТ',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.colorUsername || '1'
-    ],
-    taskKrus: ['Быстрый просмотр ТТ в КРУС',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.taskKrus || '1'
-    ],
-    taskPreview: ['Предпросмотр задач',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.taskPreview || '1'
-    ],
-    requestPreview:
-    ['Предпросмотр обращений',
-     {0: 'Отключить', 1: 'Фиксированная панель', 2: 'Всплывающая панель'},
-     localStorage.requestPreview || '0'
-    ],
-    requestFilter:
-    ['Быстрый фильтр обращений',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.requestFilter || '1'
-    ],
-    requestsMassChange:
-    ['Массовая смена ответственного за обращения',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.requestsMassChange || '1'
-    ],
-    requestsCounter:
-    ['Счётчик обращений',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.requestsCounter || '0'
-    ],
-    requestsPageExtend:
-    ['Отображение 200 обращений на странице вместо 100',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.requestsPageExtend || '1'
-    ],
-    refreshCountdown:
-    ['Обратный отсчёт обновления страницы',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.refreshCountdown || '1'
-    ],
-    clickableLinks:
-    ['Кликабельные ссылки и номера',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.clickableLinks || '1'
-    ],
-    regRequestAutofill:
-    ['Автозаполнение окна регистрации обращения',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.regRequestAutofill || '1'
-    ],
-    defaultRequestType:
-    ['Тип обращения на контрагенте по умолчанию',
-     requestTypes,
-     localStorage.defaultRequestType || 'paymentreq'
-    ],
-    quickRequest:
-    ['Быстрый выбор типа обращения',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.quickRequest || '1'
-    ],
-    responsibleDepartment:
-    ['Отображение ответственного подразделения',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.responsibleDepartment || '0'
-    ],
-    showAccountInfo:
-    ['Отображение логина и пароля аккаунта',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.showAccountInfo || '1'
-    ],
-    autoResize:
-    ['Автоматический подбор размера окна',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.autoResize || '1'
-    ],
-    autoResizeTimeout:
-    ['Задержка автоподбора размера окна',
-     {75: '75 мс', 100: '100 мс', 125: '125 мс', 150: '150 мс', 175: '175 мс',
-      200: '200 мс', 225: '225 мс', 250: '250 мс', 275: '275 мс', 300: '300 мс'},
-     localStorage.autoResizeTimeout || '200'
-    ],
-    fullsizeSelects:
-    ['Полноразмерные раскрывающиеся списки',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.fullsizeSelects || '1'
-    ],
-    hideNotifyBlock:
-    ['Минимизация списка оповещаемых',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.hideNotifyBlock || '1'
-    ],
-    filterNotifyBlock:
-    ['Альтернативная фильтрация списка оповещаемых',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.filterNotifyBlock || '1'
-    ],
-    textEditor:
-    ['Редактор текстовых полей',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.textEditor || '1'
-    ],
-    textEditorHot:
-    ['Редактор текстовых полей горячими клавишами',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.textEditorHot || '1'
-    ],
-    textEditorBehavior:
-    ['Поведение редактора текстовых полей',
-     {0: 'Переходить в конец текста', 1: 'Выделять обработанный текст'},
-     localStorage.textEditorBehavior || '1'
-    ],
-    textTemplates:
-    ['Шаблоны текстовых полей',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.textTemplates || '1'
-    ],
-    hideInSearchResults:
-    ['Скрытие длинных списков в столбцах результатов поиска',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.hideInSearchResults || '1'
-    ],
-    quickSearch:
-    ['Упрощённый поиск',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.quickSearch || '1'
-    ],
-    quickSearchForceOpen:
-    ['Действие упрощённого поиска',
-     {0: 'Переход к результатам', 1: 'Прямой переход в результат', 2: 'Прямой переход в результат (адаптивный)'},
-     localStorage.quickSearchForceOpen || '2'
-    ],
-    quickSearchSpaceToAsterisk:
-    ['Замена пробела на "*" в упрощённом поиске',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.quickSearchSpaceToAsterisk || '1'
-    ],
-    localNotes:
-    ['Краткие заметки (закладки)',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.localNotes || '1'
-    ],
-    localNotesTTL:
-    ['Время хранения заметок',
-     {0: 'Хранить всегда', 1: '1 день', 2: '2 дня', 4: '4 дня', 7: '7 дней', 14: '14 дней', 30: '30 дней'},
-     localStorage.localNotesTTL || '0'
-    ],
-    submitCtrlEnter:
-    ['Отправка по Ctrl+Enter',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.submitCtrlEnter || '1'
-    ],
-    experimental:
-    ['Экспериментальные функции',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.experimental || '0'
-    ],
-	colorService:
-    ['Окрас списка услуг при регистрации',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.colorService || '1'
-    ],
-    colorTable:
-    ['Окрас таблицы с ТТ',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.colorTable || '1'
-    ],
-    colorHistory:
-    ['Окрас таблицы с историей ТТ',
-     {0: 'Отключить', 1: 'Включить'},
-     localStorage.colorHistory || '1'
-    ]
-};
-
-// Объект шаблонов ответов.
-var answerTemplates = {
-    addCommentTemplate:
-    ['Шаблоны добавления комментария',
-     localStorage.addCommentTemplate || 'Нет ответа.\nНедоступен.\nЗанято.\nСброс.\n' +
-                'Автоответчик.\nОтправлен новый счет и указано напоминание о долге в письме красными буквами.\nВ выписке \nприслали платежное поручение'
-    ],
-    setTaskStateTemplate:
-    ['Шаблоны смены состояния задачи',
-     localStorage.setTaskStateTemplate || 'Выполнено\nподписанные документы в файлах'
-    ],
-    regRequestClientTemplate:
-    ['Шаблоны регистрации обращения на контрагенте',
-     localStorage.regRequestClientTemplate || '1С+\nДолжник\n, предоплатник\n' +
-                'В выписке \nПрислали ПП\nПросьба в счете и счет-фактуре от __.__ произвести минусовую корректировку на сумму ___ по услуге _____ по причине _____.\nклиент переведен в арм на договор \nНа почту отправлено напоминание об оплате и счета за месяц.'
-    ],
-    regRequestPointTemplate:
-    ['Шаблоны регистрации обращения на точке присутствия',
-     localStorage.regRequestPointTemplate || 'Не отвечает коммутатор xxxxx.\nРастут ошибки на магистрали.\n' +
-     'Подключен по меди, аплинк xxxxx.\nПодключен по оптике, аплинк xxxxx.\nАДС о работах не сообщали.\n' +
-     'Отключали электричество, после включения оборудование не поднялось.\nНеобходима замена коммутатора.'
-    ],
-    setStateTemplate:
-    ['Шаблоны смены состояния',
-     localStorage.setStateTemplate || '1С+\nВыполнено\nподписанные документы в файлах.'
-    ],
-    changeResponsibleTemplate:
-    ['Шаблоны смены ответственного',
-     localStorage.changeResponsibleTemplate || 'Нет ответа.\nНедоступен.\nЗанято.\nСброс.\nАвтоответчик.\n' +
-     'Перезвонить позже.\nАбонент перезвонит сам.\nНе дозвонился.'
-    ],
-    additionalInfoTemplate:
-    ['Шаблоны дополнительной информации на карточке контрагента',
-     localStorage.additionalInfoTemplate || 'Свитч 172.17.ххх порт ххх.\nНе хватает фантазии.'
-    ]
-};
-
 // Страница настроек.
 var configVer = '8',
     configLinkBlink,
-    pageButtons = document.querySelector('.pageheader .navpath[valign="top"]>nobr');
+    pageButtons = document.querySelector('.pageheader .navpath[valign="top"]>nobr'),
+    configLink = document.createElement('a'),
+    needReload = false,
+    cnfScrollTop = 0;
+
+function build_conf_page(event) {
+    if (typeof event !== 'undefined') event.preventDefault();
+    // При открытии настроек убираем "оповещение".
+    localStorage.lastConfigVer = configVer;
+    clearInterval(configLinkBlink);
+    configLink.style.color = '';
+
+    let configWrap = document.createElement('div');
+    configWrap.style.zIndex = '1015';
+    configWrap.style.position = 'fixed';
+    configWrap.style.top = '0px';
+    configWrap.style.left = '0px';
+    configWrap.style.width = '100%';
+    configWrap.style.height = '100%';
+    configWrap.style.background = 'rgba(50,50,50,0.5)';
+    configWrap.onclick = function(event) {
+        if (event.target == this) {
+            cnfScrollTop = configContainer.scrollTop;
+            this.remove();
+            if (needReload) {
+                location.reload();
+            }
+        }
+    };
+    document.body.appendChild(configWrap);
+
+    let configContainer = document.createElement('div');
+    configContainer.style.position = 'relative';
+    configContainer.style.width = '50%';
+    configContainer.style.top = '15px';
+    configContainer.style.maxHeight = 'calc(100% - 60px)';
+    configContainer.style.overflowY = 'auto';
+    configContainer.style.margin = 'auto';
+    configContainer.style.padding = '15px';
+    configContainer.style.background = '#ddd';
+    configContainer.style.color = '#444';
+    configContainer.innerHTML = '<span style="font-size: 12pt; font-weight: bold;">Параметры Naumen Tweaks</span><br><br>';
+    configWrap.appendChild(configContainer);
+
+    // Блокируем прокрутку любых элементов, кроме блока настроек.
+    configWrap.onwheel = function(event) {
+        // Если элемент события прокрутки не принадлежит настройкам, ничего не делаем.
+        if (! isChildOf(event.target, configWrap)) event.preventDefault();
+
+        let area = configContainer,
+            delta = event.deltaY || event.detail || event.wheelDelta;
+
+        if (delta < 0 && area.scrollTop === 0) {
+            event.preventDefault();
+        }
+        if (delta > 0 && area.scrollHeight - area.clientHeight - area.scrollTop <= 1) {
+            event.preventDefault();
+        }
+        cnfScrollTop = area.scrollTop;
+    };
+
+    // Добавляем параметры.
+    for (let param in parameters) {
+        let select = document.createElement('select');
+        select.style.minHeight = '21px';
+        select.style.margin = '2px 0';
+        select.style.width = '100%';
+        select.size = '1';
+        select.id = param;
+        if (! localStorage[param]) {
+            select.innerHTML += '<option value="undefined"></option>';
+        }
+        for (let option in parameters[param][1]) {
+            select.innerHTML += '<option value="' + option + '">' + parameters[param][1][option] + '</option>';
+        }
+        changeSel(localStorage[param], select, false);
+        select.onchange = function() {
+            let value = this.options[this.selectedIndex].value;
+            if (value != 'undefined') {
+                localStorage[this.id] = value;
+                needReload = true;
+                if (param == 'mydep') sessionStorage.removeItem('employees');
+                loadParameters();
+                configWrap.remove();
+                build_conf_page();
+            }
+        };
+        let label = document.createElement('label');
+        label.innerHTML = '<b>' + parameters[param][0] + ':</b><br>';
+        label.appendChild(select);
+        configContainer.appendChild(label);
+        configContainer.appendChild(document.createElement('br'));
+        configContainer.appendChild(document.createElement('br'));
+    }
+
+    // Добавляем поля редактирования шаблонов.
+    for (let answers in answerTemplates) {
+        let templateLabel = document.createElement('label');
+        templateLabel.innerHTML = '<b>' + answerTemplates[answers][0] + ':</b> (по строке на вариант)<br>';
+        configContainer.appendChild(templateLabel);
+
+        let answersText = document.createElement('textarea');
+        answersText.style.margin = '2px 0';
+        answersText.style.width = 'calc(100% - 4px)';
+        answersText.style.resize = 'vertical';
+        answersText.style.whiteSpace = 'pre';
+        answersText.style.boxSizing = 'content-box';
+        answersText.id = answers;
+        answersText.value = answerTemplates[answers][1];
+        answersText.oninput = function() {
+            localStorage[this.id] = this.value;
+            needReload = true;
+        };
+        answersText.onblur = function() {
+            loadParameters();
+            configWrap.remove();
+            build_conf_page();
+        };
+        templateLabel.appendChild(answersText);
+        answersText.style.height = answersText.scrollHeight + 'px';
+
+        configContainer.appendChild(document.createElement('br'));
+        configContainer.appendChild(document.createElement('br'));
+    }
+
+    // Добавляем поля редактирования ответственных и типов обращений.
+    for (let idStr in objIds) {
+        let templateLabel = document.createElement('label');
+        templateLabel.innerHTML = '<b>' + objIds[idStr][0]
+            + ':</b> (по строке на вариант, # - игнорировать строку, пустая строка - разделитель)<br>';
+        configContainer.appendChild(templateLabel);
+
+        let idsText = document.createElement('textarea');
+        idsText.style.margin = '2px 0';
+        idsText.style.width = 'calc(100% - 4px)';
+        idsText.style.resize = 'vertical';
+        idsText.style.whiteSpace = 'pre';
+        idsText.style.boxSizing = 'content-box';
+        idsText.id = idStr;
+        idsText.value = objIds[idStr][1].trim().replace(/\n[ \t]+/g, '\n');
+        idsText.oninput = function() {
+            localStorage[this.id] = this.value;
+            needReload = true;
+        };
+        idsText.onblur = function() {
+            loadParameters();
+            configWrap.remove();
+            build_conf_page();
+        };
+        templateLabel.appendChild(idsText);
+        idsText.style.height = idsText.scrollHeight + 'px';
+
+        configContainer.appendChild(document.createElement('br'));
+        configContainer.appendChild(document.createElement('br'));
+    }
+
+    let clearConfig = document.createElement('a');
+    clearConfig.innerHTML = 'Очистить данные скрипта';
+    clearConfig.href = '';
+    clearConfig.onclick = function(event) {
+        event.preventDefault();
+        var isSure = window.confirm('Будут удалены все данные и параметры Naumen Tweaks!\nПродолжить?');
+        if (isSure) {
+            localStorage.clear();
+            sessionStorage.clear();
+            location.reload();
+        }
+        return false;
+    };
+    configContainer.appendChild(clearConfig);
+    configContainer.scrollTop = cnfScrollTop
+    return false;
+};
+
 if (pageButtons) {
-    let needReload = false,
-        configLink = document.createElement('a');
     pageButtons.parentNode.style.paddingBottom = '2px';
     configLink.innerHTML = '[настройки скрипта]';
     configLink.style.whiteSpace = 'nowrap';
@@ -532,159 +721,7 @@ if (pageButtons) {
         }, 700);
     }
     configLink.onclick = function(event) {
-        event.preventDefault();
-        // При открытии настроек убираем "оповещение".
-		    localStorage.lastConfigVer = configVer;
-        clearInterval(configLinkBlink);
-        configLink.style.color = '';
-
-        let configWrap = document.createElement('div');
-        configWrap.style.zIndex = '1015';
-        configWrap.style.position = 'fixed';
-        configWrap.style.top = '0px';
-        configWrap.style.left = '0px';
-        configWrap.style.width = '100%';
-        configWrap.style.height = '100%';
-        configWrap.style.background = 'rgba(50,50,50,0.5)';
-        configWrap.onclick = function(event) {
-            if (event.target == this) {
-                this.remove();
-                if (needReload) {
-                    location.reload();
-                }
-            }
-        };
-        document.body.appendChild(configWrap);
-
-        let configContainer = document.createElement('div');
-        configContainer.style.position = 'relative';
-        configContainer.style.width = '50%';
-        configContainer.style.top = '15px';
-        configContainer.style.maxHeight = 'calc(100% - 60px)';
-        configContainer.style.overflowY = 'auto';
-        configContainer.style.margin = 'auto';
-        configContainer.style.padding = '15px';
-        configContainer.style.background = '#ddd';
-        configContainer.style.color = '#444';
-        configContainer.innerHTML = '<span style="font-size: 12pt; font-weight: bold;">Параметры Naumen Tweaks</span><br><br>';
-        configWrap.appendChild(configContainer);
-
-        // Блокируем прокрутку любых элементов, кроме блока настроек.
-        configWrap.onwheel = function(event) {
-            // Если элемент события прокрутки не принадлежит истории, ничего не делаем.
-            if (! isChildOf(event.target, configWrap)) event.preventDefault();
-
-            let area = configContainer,
-                delta = event.deltaY || event.detail || event.wheelDelta;
-
-            if (delta < 0 && area.scrollTop === 0) {
-                event.preventDefault();
-            }
-            if (delta > 0 && area.scrollHeight - area.clientHeight - area.scrollTop <= 1) {
-                event.preventDefault();
-            }
-        };
-
-        // Добавляем параметры.
-        for (let param in parameters) {
-            let select = document.createElement('select');
-            select.style.minHeight = '21px';
-            select.style.margin = '2px 0';
-            select.style.width = '100%';
-            select.size = '1';
-            select.id = param;
-            if (! localStorage[param]) {
-                select.innerHTML += '<option value="undefined"></option>';
-            }
-            for (let option in parameters[param][1]) {
-                select.innerHTML += '<option value="' + option + '">' + parameters[param][1][option] + '</option>';
-            }
-            changeSel(localStorage[param], select, false);
-            select.onchange = function() {
-                let value = this.options[this.selectedIndex].value;
-                if (value != 'undefined') {
-					          localStorage[this.id] = value;
-                    needReload = true;
-                    let emptyOption = this.querySelector('[value="undefined"]');
-                    if (emptyOption) {
-                        emptyOption.remove();
-                    }
-                }
-            };
-            let label = document.createElement('label');
-            label.innerHTML = '<b>' + parameters[param][0] + ':</b><br>';
-            label.appendChild(select);
-            configContainer.appendChild(label);
-            configContainer.appendChild(document.createElement('br'));
-            configContainer.appendChild(document.createElement('br'));
-        }
-
-        // Добавляем поля редактирования шаблонов.
-        for (let answers in answerTemplates) {
-            let templateLabel = document.createElement('label');
-            templateLabel.innerHTML = '<b>' + answerTemplates[answers][0] + ':</b> (по строке на вариант)<br>';
-            configContainer.appendChild(templateLabel);
-
-            let answersText = document.createElement('textarea');
-            answersText.style.margin = '2px 0';
-            answersText.style.width = 'calc(100% - 4px)';
-            answersText.style.resize = 'vertical';
-            answersText.style.whiteSpace = 'pre';
-            answersText.style.boxSizing = 'content-box';
-            answersText.id = answers;
-            answersText.value = answerTemplates[answers][1];
-            answersText.oninput = function() {
-				    localStorage[this.id] = this.value;
-                needReload = true;
-            };
-            templateLabel.appendChild(answersText);
-            answersText.style.height = answersText.scrollHeight + 'px';
-
-            configContainer.appendChild(document.createElement('br'));
-            configContainer.appendChild(document.createElement('br'));
-        }
-
-        // Добавляем поля редактирования ответственных и типов обращений.
-        for (let idStr in objIds) {
-            let templateLabel = document.createElement('label');
-            templateLabel.innerHTML = '<b>' + objIds[idStr][0]
-                + ':</b> (по строке на вариант, # - игнорировать строку, пустая строка - разделитель)<br>';
-            configContainer.appendChild(templateLabel);
-
-            let idsText = document.createElement('textarea');
-            idsText.style.margin = '2px 0';
-            idsText.style.width = 'calc(100% - 4px)';
-            idsText.style.resize = 'vertical';
-            idsText.style.whiteSpace = 'pre';
-            idsText.style.boxSizing = 'content-box';
-            idsText.id = idStr;
-            idsText.value = objIds[idStr][1].trim().replace(/\n[ \t]+/g, '\n');;
-            idsText.oninput = function() {
-				    localStorage[this.id] = this.value;
-                needReload = true;
-            };
-            templateLabel.appendChild(idsText);
-            idsText.style.height = idsText.scrollHeight + 'px';
-
-            configContainer.appendChild(document.createElement('br'));
-            configContainer.appendChild(document.createElement('br'));
-        }
-
-		    let clearConfig = document.createElement('a');
-        clearConfig.innerHTML = 'Очистить данные скрипта';
-        clearConfig.href = '';
-        clearConfig.onclick = function(event) {
-            event.preventDefault();
-            var isSure = window.confirm('Будут удалены все данные и параметры Naumen Tweaks!\nПродолжить?');
-            if (isSure) {
-                localStorage.clear();
-                sessionStorage.clear();
-                location.reload();
-            }
-            return false;
-        };
-		    configContainer.appendChild(clearConfig);
-        return false;
+        build_conf_page(event);
     };
     pageButtons.parentNode.appendChild(configLink);
 }
@@ -2335,17 +2372,19 @@ if (expr.test(window.location.href)) {
     if (textarea) {
         doEditor(textarea, answerTemplates.regRequestClientTemplate[1].split('\n'));
     }
-if (parameters.colorService[2] === '1'){
-	document.querySelectorAll('#services option[nonshifted*="/неактивна/"]').forEach(option => {
-    	option.style.backgroundColor = '#FF7D73A0';
-	});
-	document.querySelectorAll('#services option[nonshifted*="/активна/"]').forEach(option => {
-    	option.style.backgroundColor = '#28a745A0';
-	});
-	document.querySelectorAll('#services option[nonshifted*="/планируется к продаже/"]').forEach(option => {
-    	option.style.backgroundColor = '#ffff0070';
-	});}
-	
+
+    if (parameters.colorService[2] === '1') {
+        document.querySelectorAll('#services option[nonshifted*="/неактивна/"]').forEach(option => {
+            option.style.backgroundColor = '#FF7D73A0';
+        });
+        document.querySelectorAll('#services option[nonshifted*="/активна/"]').forEach(option => {
+            option.style.backgroundColor = '#28a745A0';
+        });
+        document.querySelectorAll('#services option[nonshifted*="/планируется к продаже/"]').forEach(option => {
+            option.style.backgroundColor = '#ffff0070';
+        });
+    }
+
     var sel = document.getElementById('BOCase');
 
     // Автозаполнение окна регистрации обращения.

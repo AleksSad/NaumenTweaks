@@ -5,8 +5,8 @@
 // @author      freetushkan
 // @include     https://crm.o.westcall.spb.ru*
 // @include     https://crm.westcall.spb.ru*
-// @version     4.20.19
-// @date        2025-11-23
+// @version     4.20.20
+// @date        2025-11-24
 // @grant       GM_addStyle
 // @run-at      document-end
 // @downloadURL https://gist.github.com/freetushkan/819343498d988b6a8ffe25ee157ff2d2/raw/NaumenTweaks.user.js
@@ -618,6 +618,7 @@ function build_conf_page(event) {
                 needReload = true;
                 if (param == 'mydep') sessionStorage.removeItem('employees');
                 loadParameters();
+                cnfScrollTop = configContainer.scrollTop;
                 configWrap.remove();
                 build_conf_page();
             }
@@ -650,6 +651,7 @@ function build_conf_page(event) {
         };
         answersText.onblur = function() {
             loadParameters();
+            cnfScrollTop = configContainer.scrollTop;
             configWrap.remove();
             build_conf_page();
         };
@@ -681,6 +683,7 @@ function build_conf_page(event) {
         };
         idsText.onblur = function() {
             loadParameters();
+            cnfScrollTop = configContainer.scrollTop;
             configWrap.remove();
             build_conf_page();
         };

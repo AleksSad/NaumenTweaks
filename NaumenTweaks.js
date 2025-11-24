@@ -12,7 +12,7 @@
 // @downloadURL https://gist.github.com/freetushkan/819343498d988b6a8ffe25ee157ff2d2/raw/NaumenTweaks.user.js
 // ==/UserScript==
 
-
+////////////// - (added) Окрас списка услуг при регистрации (SD_IT)
 ////2025-11-23 Включены правки от неизвестного автора:
 ////////////// - Шаблон для Интернета в едитор (2023-01-31).
 ////////////// - Шаблон для Телефонии в едитор (Ruda) (2023-04-10).
@@ -457,6 +457,11 @@ var parameters = {
     ['Экспериментальные функции',
      {0: 'Отключить', 1: 'Включить'},
      localStorage.experimental || '0'
+    ],
+	colorService:
+    ['Окрас списка услуг при регистрации',
+     {0: 'Отключить', 1: 'Включить'},
+     localStorage.colorService || '1'
     ],
     colorTable:
     ['Окрас таблицы с ТТ',
@@ -2330,7 +2335,17 @@ if (expr.test(window.location.href)) {
     if (textarea) {
         doEditor(textarea, answerTemplates.regRequestClientTemplate[1].split('\n'));
     }
-
+if (parameters.colorService[2] === '1'){
+	document.querySelectorAll('#services option[nonshifted*="/неактивна/"]').forEach(option => {
+    	option.style.backgroundColor = '#FF7D73A0';
+	});
+	document.querySelectorAll('#services option[nonshifted*="/активна/"]').forEach(option => {
+    	option.style.backgroundColor = '#28a745A0';
+	});
+	document.querySelectorAll('#services option[nonshifted*="/планируется к продаже/"]').forEach(option => {
+    	option.style.backgroundColor = '#ffff0070';
+	});}
+	
     var sel = document.getElementById('BOCase');
 
     // Автозаполнение окна регистрации обращения.

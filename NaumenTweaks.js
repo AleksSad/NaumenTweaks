@@ -241,7 +241,7 @@ let requestTypes = {},
         #serviceConsultation | Консультация
         #debitorka | Работа с дебиторкой
     `],
-        responsibles: ["Ответственные", localStorage.responsibles || `
+        responsibles: ["Отделы", localStorage.responsibles || `
         corebo180580g0000i8li5a87ilb80u4 | ООК | Отдел обслуживания клиентов
         corebo18058200000ocalu5qtitlosfc | Приборки | Группа обслуживания КК M&A
         corebo180580g0000i8li5f2oueiengo | Дебиторы | Сектор по работе с дебиторской задолженностью
